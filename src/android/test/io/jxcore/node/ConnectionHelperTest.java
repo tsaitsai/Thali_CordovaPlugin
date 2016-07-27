@@ -15,6 +15,7 @@ import org.thaliproject.p2p.btconnectorlib.ConnectionManagerSettings;
 import org.thaliproject.p2p.btconnectorlib.DiscoveryManager;
 import org.thaliproject.p2p.btconnectorlib.DiscoveryManagerSettings;
 import org.thaliproject.p2p.btconnectorlib.PeerProperties;
+import org.thaliproject.p2p.btconnectorlib.utils.PeerModel;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -660,5 +661,34 @@ public class ConnectionHelperTest {
         mConnectionHelper.onBluetoothMacAddressResolved("00:11:22:33:44:55");
     }
 
-    //TODO Write tests for onPeerDiscovered and onPeerLost
+    //TODO Write tests for onPeerDiscovered
+    @Test
+    public void testOnPeerLost() throws Exception {
+        ConnectionModel connectionModel = mConnectionHelper.getConnectionModel();
+        String bluetoothMacAddressOutgoing = "00:11:22:33:44:55";
+        OutgoingSocketThreadMock outgoingSocketThreadMock = new OutgoingSocketThreadMock(
+            null, mListenerMock, mInputStreamMock, mOutputStreamMock);
+
+        outgoingSocketThreadMock
+            .setPeerProperties(new PeerProperties(bluetoothMacAddressOutgoing));
+        connectionModel.addConnectionThread(outgoingSocketThreadMock);
+
+        PeerModel peerModel  = mConnectionHelper.getDiscoveryManager().getPeerModel();
+        PeerProperties peerProperties = new PeerProperties(bluetoothMacAddressOutgoing);
+        mConnectionHelper.onPeerLost(peerProperties);
+
+        PeerProperties lostPeerProperties =  peerModel
+            .getDiscoveredPeerByBluetoothMacAddress(bluetoothMacAddressOutgoing);
+
+        assertThat("Peer properties should be the same", peerProperties,
+            is(equalTo(lostPeerProperties)));
+        peerModel.clear();
+        mConnectionHelper.killConnections(true);
+
+        mConnectionHelper.onPeerLost(lostPeerProperties);
+        lostPeerProperties =  peerModel
+            .getDiscoveredPeerByBluetoothMacAddress(bluetoothMacAddressOutgoing);
+
+        assertThat("Peer properties should be null", lostPeerProperties, is(nullValue()));
+    }
 }
