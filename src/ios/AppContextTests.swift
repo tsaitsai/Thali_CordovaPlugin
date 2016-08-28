@@ -56,17 +56,17 @@ class AppContextTests: XCTestCase {
         var wifiStateExpected: String!
         var cellularStateExpected: String!
 
-        BluetoothHarwareControlManager.sharedInstance().registerObserver(self)
+        BluetoothHardwareControlManager.sharedInstance().registerObserver(self)
         NSThread.sleepForTimeInterval(1)
 
         // Push hardware state
-        let bluetoothIsPoweredBeforeTest = BluetoothHarwareControlManager.sharedInstance().bluetoothIsPowered()
+        let bluetoothIsPoweredBeforeTest = BluetoothHardwareControlManager.sharedInstance().bluetoothIsPowered()
 
         //TODO: turn bluetooth (and BLE) on and check status
         if !bluetoothIsPoweredBeforeTest {
             expectation = expectationWithDescription("Bluetooth turned on")
 
-            BluetoothHarwareControlManager.sharedInstance().turnBluetoothOn()
+            BluetoothHardwareControlManager.sharedInstance().turnBluetoothOn()
 
             waitForExpectationsWithTimeout(10, handler: { error in
                 XCTFail("Can not turn on bluetooth hardware")
@@ -87,7 +87,7 @@ class AppContextTests: XCTestCase {
         //TODO: turn bluetooth (and BLE) off and check status
         expectation = expectationWithDescription("Bluetooth turned off")
 
-        BluetoothHarwareControlManager.sharedInstance().turnBluetoothOff()
+        BluetoothHardwareControlManager.sharedInstance().turnBluetoothOff()
 
         waitForExpectationsWithTimeout(10, handler: { error in
             XCTFail("Can not turn off bluetooth hardware")
@@ -105,8 +105,8 @@ class AppContextTests: XCTestCase {
 
         // Restore hardware state
         bluetoothIsPoweredBeforeTest
-            ? BluetoothHarwareControlManager.sharedInstance().turnBluetoothOn()
-            : BluetoothHarwareControlManager.sharedInstance().turnBluetoothOff()
+            ? BluetoothHardwareControlManager.sharedInstance().turnBluetoothOn()
+            : BluetoothHardwareControlManager.sharedInstance().turnBluetoothOff()
 
         //        //TODO: turn wifi on and check status
         //        wifiStateExpected = "on"
@@ -127,7 +127,7 @@ class AppContextTests: XCTestCase {
     }
 }
 
-extension AppContextTests : BluetoothHarwareControlObserverProtocol {
+extension AppContextTests : BluetoothHardwareControlObserverProtocol {
     func receivedBluetoothNotification(btNotification: BluetoothHardwareControlNotification) {
         if btNotification == PowerChangedNotification {
             expectation?.fulfill()

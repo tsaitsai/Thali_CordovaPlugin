@@ -69,7 +69,7 @@
     // sharedInstance method at the early time.
     // This method should be invoked on main thread.
     dispatch_async(dispatch_get_main_queue(), ^{
-        [BluetoothHarwareControlManager sharedInstance];
+        [BluetoothHardwareControlManager sharedInstance];
     });
 #endif
 
