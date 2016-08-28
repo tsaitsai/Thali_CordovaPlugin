@@ -22,6 +22,12 @@ static void *frameworkHandle;
 
 @implementation BluetoothHarwareControlManager
 
+// Instantiate current class dynamically
++ (BluetoothManager *) bluetoothManagerSharedInstance {
+    Class bm = NSClassFromString(@"BluetoothManager");
+    return (BluetoothManager *)[bm sharedInstance];
+}
+
 + (BluetoothHarwareControlManager *)sharedInstance
 {
     static BluetoothHarwareControlManager *bluetoothManager = nil;
@@ -37,12 +43,6 @@ static void *frameworkHandle;
     return bluetoothManager;
 }
 
-// Instantiate current class dynamically
-+ (BluetoothManager *) bluetoothManagerSharedInstance {
-    Class bm = NSClassFromString(@"BluetoothManager");
-    return (BluetoothManager *)[bm sharedInstance];
-}
-
 - (instancetype)init
 {
     if (self = [super init]) {
@@ -52,5 +52,25 @@ static void *frameworkHandle;
     return self;
 }
 
+#pragma mark - class methods
+
+- (BOOL)bluetoothIsPowered
+{
+    return [[BluetoothHarwareControlManager bluetoothManagerSharedInstance] powered];
+}
+
+- (void)turnBluetoothOn
+{
+    if (![self bluetoothIsPowered]) {
+        [[BluetoothHarwareControlManager bluetoothManagerSharedInstance] setPowered:YES];
+    }
+}
+
+- (void)turnBluetoothOff
+{
+    if ([self bluetoothIsPowered]) {
+        [[BluetoothHarwareControlManager bluetoothManagerSharedInstance] setPowered:NO];
+    }
+}
 
 @end

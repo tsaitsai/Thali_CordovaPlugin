@@ -15,6 +15,10 @@
 
 + (BluetoothHarwareControlManager *)sharedInstance;
 
+- (BOOL)bluetoothIsPowered;
+- (void)turnBluetoothOn;
+- (void)turnBluetoothOff;
+
 @end
 
 #endif /* BluetoothHarwareControlManager_h */
