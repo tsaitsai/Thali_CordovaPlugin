@@ -9,5 +9,17 @@
 #ifndef BluetoothHarwareControlObserver_h
 #define BluetoothHarwareControlObserver_h
 
+#import <Foundation/Foundation.h>
+
+typedef enum BluetoothHardwareControlNotification : NSUInteger {
+    PowerChangedNotification,
+} BluetoothHardwareControlNotification;
+
+@protocol BluetoothHarwareControlObserverProtocol <NSObject>
+
+@required
+- (void)receivedBluetoothNotification: (BluetoothHardwareControlNotification)btNotification;
+
+@end
 
 #endif /* BluetoothHarwareControlObserver_h */
