@@ -62,6 +62,17 @@
     [self defineDidRegisterToNative:appContext];
     [self defineGetOSVersion:appContext];
     [self defineExecuteNativeTests:appContext];
+
+#if TEST
+    // Dersim Davaod (8/19/16):
+    // For some unknown reasons we should invoke
+    // sharedInstance method at the early time.
+    // This method should be invoked on main thread.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [BluetoothHarwareControlManager sharedInstance];
+    });
+#endif
+
 }
 
 - (void)defineStartListeningForAdvertisements:(AppContext *)appContext {
