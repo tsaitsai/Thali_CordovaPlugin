@@ -10,6 +10,8 @@
 
 #import <ThaliCore/NetworkReachability.h>
 
+#import <ThaliCore/BluetoothHarwareControlManager.h>
+
 //! Project version number for ThaliCoreWithTests.
 FOUNDATION_EXPORT double ThaliCoreVersionNumber;
 
