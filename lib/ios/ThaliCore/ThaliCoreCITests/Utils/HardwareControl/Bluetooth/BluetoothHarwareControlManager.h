@@ -9,5 +9,12 @@
 #ifndef BluetoothHarwareControlManager_h
 #define BluetoothHarwareControlManager_h
 
+#import <Foundation/Foundation.h>
+
+@interface BluetoothHarwareControlManager : NSObject
+
++ (BluetoothHarwareControlManager *)sharedInstance;
+
+@end
 
 #endif /* BluetoothHarwareControlManager_h */
