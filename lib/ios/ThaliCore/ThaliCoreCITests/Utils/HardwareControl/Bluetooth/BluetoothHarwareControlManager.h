@@ -10,6 +10,7 @@
 #define BluetoothHarwareControlManager_h
 
 #import <Foundation/Foundation.h>
+#import "BluetoothHarwareControlObserver.h"
 
 @interface BluetoothHarwareControlManager : NSObject
 
@@ -18,6 +19,9 @@
 - (BOOL)bluetoothIsPowered;
 - (void)turnBluetoothOn;
 - (void)turnBluetoothOff;
+
+- (void)registerObserver:(id<BluetoothHarwareControlObserverProtocol>)observer;
+- (void)unregisterObserver:(id<BluetoothHarwareControlObserverProtocol>)observer;
 
 @end
 
