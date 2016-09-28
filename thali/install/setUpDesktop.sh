@@ -14,13 +14,13 @@ npm install --no-optional
 node generateServerAddress.js
 
 cd ../../thali
-jx npm install --no-optional
-jx npm link
+npm install --no-optional
+npm link
 
 cd install
-jx npm install --no-optional
+npm install --no-optional
 
 cd ../../test/www/jxcore
-jx npm link thali
+npm link thali
 jx installCustomPouchDB.js
 jx npm install --no-optional
