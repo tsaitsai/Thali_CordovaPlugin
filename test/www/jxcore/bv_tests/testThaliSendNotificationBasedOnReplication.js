@@ -16,6 +16,7 @@ var urlsafeBase64 = require('urlsafe-base64');
 var RefreshTimerManager =
   require('thali/NextGeneration/replication/utilities').RefreshTimerManager;
 var thaliConfig = require('thali/NextGeneration/thaliConfig');
+var createLogger = require('../lib/testLogger');
 
 var test = tape({
   setup: function (t) {
@@ -91,6 +92,7 @@ var DEFAULT_MILLISECONDS_UNTIL_EXPIRE = 1000 * 60 * 60 * 24;
  */
 function testScaffold(t, pouchDbInitFunction, mockInitFunction,
                       runTestFunction, millisecondsUntilExpiration) {
+  var logger = createLogger('testScaffold');
   var router = express.Router();
   var ecdhForLocalDevice = crypto.createECDH('secp521r1').generateKeys();
   if (!millisecondsUntilExpiration) {
@@ -107,8 +109,10 @@ function testScaffold(t, pouchDbInitFunction, mockInitFunction,
 
   var spyTimers = [];
 
+  logger.debug('call pouchDbInitFunction...');
   pouchDbInitFunction(pouchDB)
     .then(function () {
+      logger.debug('call pouchDbInitFunction... OK');
       var MockThaliNotificationServer =
         function (router, ecdhForLocalDevice, millisecondsUntilExpiration) {
           var spyServer = new SpyOnThaliNotificationServerConstructor(router,
@@ -147,8 +151,10 @@ function testScaffold(t, pouchDbInitFunction, mockInitFunction,
         new ThaliSendNotificationBasedOnReplicationProxyquired(router,
           ecdhForLocalDevice, millisecondsUntilExpiration, pouchDB);
 
+      logger.debug('run test function...');
       runTestFunction(thaliSendNotificationBasedOnReplication, pouchDB)
         .then(function () {
+          logger.debug('run test function... OK');
           t.doesNotThrow(function () {
             mockThaliNotificationServer.verify();
           }, 'verify failed');
@@ -161,6 +167,9 @@ function testScaffold(t, pouchDbInitFunction, mockInitFunction,
           mockInitValidationFunction && mockInitValidationFunction();
           t.end();
         });
+    })
+    .catch(function (err) {
+      logger.debug('call pouchDbInitFunction... failed');
     });
 }
 
@@ -196,15 +205,24 @@ function testScaffold(t, pouchDbInitFunction, mockInitFunction,
 function testStartAndStop(t, startArg, pouchDbInitFunction, mockInitFunction,
                           betweenStartAndStopFunction,
                           millisecondsUntilExpiration) {
+  var logger = createLogger('testStartAndStop');
   testScaffold(t, pouchDbInitFunction, mockInitFunction,
     function (thaliSendNotificationBasedOnReplication, pouchDB) {
+      logger.debug('Start send notification...');
       return thaliSendNotificationBasedOnReplication.start(startArg)
         .then(function () {
+          logger.debug('Start send notification... OK');
           if (betweenStartAndStopFunction) {
+            logger.debug('Start betweenStartAndStopFunction...');
             return betweenStartAndStopFunction(pouchDB);
           }
         }).then(function () {
+          if (betweenStartAndStopFunction) {
+            logger.debug('Start betweenStartAndStopFunction... OK');
+          }
           return thaliSendNotificationBasedOnReplication.stop();
+        }).then(function () {
+          logger.debug('Stop send notification... OK');
         });
     }, millisecondsUntilExpiration);
 }
@@ -225,12 +243,19 @@ function mockStartAndStop(mockThaliNotificationServer, t, startArg) {
   };
 }
 
+for (var i = 0; i < 50; i++) {
 test('No peers and empty database', function (t) {
+  var logger = createLogger('no peers and empty db');
   var startArg = [];
+  logger.debug('Start test');
   testStartAndStop(t,
     startArg,
-    function () { return Promise.resolve(); },
+    function () {
+      logger.debug('Inside of puchdbinit function');
+      return Promise.resolve();
+    },
     function (mockThaliNotificationServer) {
+      logger.debug('Inside of mock init body');
       return mockStartAndStop(mockThaliNotificationServer, t, []);
     });
 });
@@ -360,18 +385,6 @@ test('More than maximum peers, make sure we only send maximum allowed',
                             .MAXIMUM_NUMBER_OF_PEERS_TO_NOTIFY));
     });
   });
-
-function lengthCheck (desiredMinimumLength, spyTimersArray, resolve) {
-  function areWeDoneYet () {
-    setTimeout(function () {
-      if (spyTimersArray.length <  desiredMinimumLength) {
-        return areWeDoneYet();
-      }
-      resolve();
-    }, 50);
-  }
-  areWeDoneYet();
-}
 
 test('two peers with empty DB, update the doc', function (t) {
   var partnerOnePublicKey = crypto.createECDH('secp521r1').generateKeys();
@@ -664,3 +677,16 @@ test('test calculateSeqPointKeyId', function (t) {
     .compare(publicKey), 0);
   t.end();
 });
+}
+
+function lengthCheck (desiredMinimumLength, spyTimersArray, resolve) {
+  function areWeDoneYet () {
+    setTimeout(function () {
+      if (spyTimersArray.length <  desiredMinimumLength) {
+        return areWeDoneYet();
+      }
+      resolve();
+    }, 50);
+  }
+  areWeDoneYet();
+}

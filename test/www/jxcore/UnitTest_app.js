@@ -20,26 +20,9 @@ var ThaliMobile = require('thali/NextGeneration/thaliMobile');
 var Promise = require('bluebird');
 var utResult = false;
 
-if (process.platform === 'android' || process.platform === 'ios') {
-  logger.debug('Running unit tests');
-  Mobile('executeNativeTests').callNative(function (result) {
-    utResult = true;
-    if (result && result.executed) {
-      logger.debug('Total number of executed tests: ', result.total);
-      logger.debug('Number of passed tests: ', result.passed);
-      logger.debug('Number of failed tests: ', result.failed);
-      logger.debug('Number of ignored tests: ', result.ignored);
-      logger.debug('Total duration: ', result.duration);
-      if (result.failed > 0) {
-        logger.debug('Failures: \n', result.failures);
-        utResult = false;
-      }
-    }
-  });
-} else {
-  // We aren't on a device so we can't run those tests anyway
-  utResult = true;
-}
+logger.debug('Skipping unit tests');
+// We aren't on a device so we can't run those tests anyway
+utResult = true;
 
 if (!utResult) {
   logger.debug('Failed to execute UT.');
