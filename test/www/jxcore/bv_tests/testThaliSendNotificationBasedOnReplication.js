@@ -170,6 +170,8 @@ function testScaffold(t, pouchDbInitFunction, mockInitFunction,
     })
     .catch(function (err) {
       logger.debug('call pouchDbInitFunction... failed');
+      logger.debug('Error: ' + err.message);
+      logger.debug(err.stack);
     });
 }
 
