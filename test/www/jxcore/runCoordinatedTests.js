@@ -1,12 +1,16 @@
 'use strict';
 
-var config       = require('./config.json')
+var config       = require('./config.json');
 var spawn        = require('child_process').spawn;
+var fs           = require('fs');
+var path         = require('path');
 var randomString = require('randomstring');
 var objectAssign = require('object-assign');
 
 
 var DEFAULT_INSTANCE_COUNT = 3;
+
+var startTime = Date.now();
 
 var parseargv = require('minimist');
 var argv = parseargv(process.argv.slice(2), {
@@ -17,7 +21,8 @@ var argv = parseargv(process.argv.slice(2), {
     serverLogs: true,
     instanceLogs: true,
     waitForInstance: false,
-    showFailedLog: false
+    showFailedLog: false,
+    output: null
   },
   boolean: [
     'serverLogs',
@@ -37,6 +42,7 @@ if (argv.waitForInstance) {
 }
 
 var instanceLogs = {};
+
 
 var logInstanceOutput = function (data, instanceId) {
   instanceLogs[instanceId] += data;
@@ -61,6 +67,13 @@ var logInstanceOutput = function (data, instanceId) {
 
   }
 };
+
+function pipe(instance, filename) {
+  var file = fs.createWriteStream(filename);
+  instance.stdout.pipe(file);
+  instance.stderr.pipe(file);
+}
+
 
 var setListeners = function (instance, instanceId) {
   instanceLogs[instanceId] = '';
@@ -98,6 +111,28 @@ var setListeners = function (instance, instanceId) {
     var codeAndSignal = 'Exit code: ' + code + '. Exit signal: ' + signal;
     logInstanceOutput(codeAndSignal, instanceId);
   });
+
+  if (argv.output) {
+    var folder = path.join(process.cwd(), argv.output);
+    var filename = path.join(
+      folder,
+      'instance-' + startTime + '-' + instanceId
+    );
+
+    try {
+      var stat = fs.statSync(folder);
+      if (!stat.isDirectory()) {
+        console.log(folder, 'is not a directory');
+        process.exit(1);
+      }
+      pipe(instance, filename);
+    } catch (e) {
+      var child = spawn('mkdir', ['-p', folder]);
+      child.on('close', function (code) {
+        pipe(instance, filename);
+      });
+    }
+  }
 };
 
 var testServerConfiguration = {
