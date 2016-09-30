@@ -165,10 +165,18 @@ function testScaffold(t, pouchDbInitFunction, mockInitFunction,
               millisecondsUntilExpiration),
           'constructor called with right args');
           mockInitValidationFunction && mockInitValidationFunction();
-          t.end();
+          pouchDB.close().then(function () {
+            t.end();
+          }).catch(function (err) {
+            t.fail('Can’t close pouchdb');
+            logger.debug('Pouchdb closing error: ' + err.message);
+            logger.debug(err.stack);
+            t.end();
+          });
         });
     })
     .catch(function (err) {
+      t.fail('please');
       logger.debug('call pouchDbInitFunction... failed');
       logger.debug('Error: ' + err.message);
       logger.debug(err.stack);
@@ -245,7 +253,12 @@ function mockStartAndStop(mockThaliNotificationServer, t, startArg) {
   };
 }
 
-for (var i = 0; i < 50; i++) {
+var originalTest = test;
+var cache = [];
+test = function (name, body) {
+  cache.push({name: name, body:body});
+};
+
 test('No peers and empty database', function (t) {
   var logger = createLogger('no peers and empty db');
   var startArg = [];
@@ -679,6 +692,23 @@ test('test calculateSeqPointKeyId', function (t) {
     .compare(publicKey), 0);
   t.end();
 });
+
+function enqueueTest(item) {
+  originalTest(item.name, item.body);
+}
+
+function lsof(t) {
+  var child = require('child_process')
+    .spawn('lsof', ['-c', 'jx']);
+  child.stdout.pipe(process.stdout);
+  child.on('close', function () {
+    t.end();
+  });
+}
+
+for (var i = 0; i < 100; i++) {
+  cache.forEach(enqueueTest);
+  //originalTest('lsof -c jx after ' + (i + 1) + ' run', lsof);
 }
 
 function lengthCheck (desiredMinimumLength, spyTimersArray, resolve) {
