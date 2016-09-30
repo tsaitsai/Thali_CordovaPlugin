@@ -12,12 +12,14 @@ import XCTest
 
 class AdvertiserManagerTests: XCTestCase {
 
+    // MARK: - State
     var serviceType: String!
     var advertiserManager: AdvertiserManager!
     let disposeTimeout: NSTimeInterval = 4.0
 
+    // MARK: - Setup
     override func setUp() {
-        serviceType = String.random(length: 7)
+        serviceType = String.randomValidServiceType(length: 7)
         advertiserManager = AdvertiserManager(serviceType: serviceType,
                                               disposeAdvertiserTimeout: disposeTimeout)
     }
@@ -27,6 +29,7 @@ class AdvertiserManagerTests: XCTestCase {
         advertiserManager = nil
     }
 
+    // MARK: - Tests
     func testStartAdvertisingChangesState() {
         // Given
         XCTAssertFalse(advertiserManager.advertising)
@@ -75,8 +78,7 @@ class AdvertiserManagerTests: XCTestCase {
                                                              errorHandler: unexpectedErrorHandler)
         XCTAssertEqual(advertiserManager.advertisers.value.count, 1)
 
-        let firstAdvertiserPeerIdentifier =
-            advertiserManager.advertisers.value.first!.peerIdentifier
+        let firstAdvertiserPeer = advertiserManager.advertisers.value.first!.peer
         let firstAdvertiserDisposedExpectation =
             expectationWithDescription("advertiser disposed after delay")
 
@@ -85,10 +87,10 @@ class AdvertiserManagerTests: XCTestCase {
                                                              errorHandler: unexpectedErrorHandler)
         XCTAssertEqual(advertiserManager.advertisers.value.count, 2)
 
-        advertiserManager.didRemoveAdvertiserWithIdentifierHandler = {
-            [weak firstAdvertiserDisposedExpectation] identifier in
+        advertiserManager.didDisposeAdvertiserForPeerHandler = {
+            [weak firstAdvertiserDisposedExpectation] peer in
 
-            XCTAssertEqual(firstAdvertiserPeerIdentifier, identifier)
+            XCTAssertEqual(firstAdvertiserPeer, peer)
             firstAdvertiserDisposedExpectation?.fulfill()
         }
 

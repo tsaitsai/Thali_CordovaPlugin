@@ -8,16 +8,9 @@
 //
 
 import XCTest
+@testable import ThaliCore
+import MultipeerConnectivity
 
 class RelayTests: XCTestCase {
 
-    // create tcp listener
-    // close tcp listener
-    // test get timeout error on create socket
-    // create vs
-    // close vs
-    // onfailure socket close vs
-    // on failure vs close socket
-    // open many streams
-    // open many virtual sockets
 }

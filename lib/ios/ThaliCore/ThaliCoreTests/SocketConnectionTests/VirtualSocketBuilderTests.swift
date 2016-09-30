@@ -7,12 +7,10 @@
 //  See LICENSE.txt file in the project root for full license information.
 //
 
+@testable import ThaliCore
 import XCTest
+import MultipeerConnectivity
 
 class VirtualSocketBuilderTests: XCTestCase {
 
-    // socket created with advertiser builder
-    // received wrong input stream for browser builder
-    // testReceiveErrorOnCreateBrowserOutputStream
-    // testReceiveErrorOnCreateAdvertiserOutputStream
 }

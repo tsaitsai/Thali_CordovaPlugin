@@ -7,173 +7,220 @@
 //  See LICENSE.txt file in the project root for full license information.
 //
 
-
 import Foundation
 
-final class Relay<SocketBuilder: VirtualSocketBuilder>: NSObject {
+/**
+ `Relay` class manages both TCP and non-TCP connections and handles binding.
+ */
+class Relay<SocketBuilder: VirtualSocketBuilder>: NSObject {
 
     // MARK: - Internal state
-    internal var listenerPort: UInt16? {
-        return tcpListener.socket.localPort
+    internal var virtualSocketsAmount: Int {
+        return virtualSockets.value.count
     }
 
     // MARK: - Private state
     private var nonTCPsession: Session
-    private var tcpListener: TCPListener
-    private var virtualNonTCPSocket: VirtualSocket?
-    private let createSocketTimeout: NSTimeInterval
+    private var virtualSockets: Atomic<[GCDAsyncSocket : VirtualSocket]> = Atomic([:])
+    private let createVirtualSocketTimeout: NSTimeInterval
 
     // MARK: - Public methods
-    init(with session: Session, createSocketTimeout: NSTimeInterval) {
+    init(with session: Session, createVirtualSocketTimeout: NSTimeInterval) {
         self.nonTCPsession = session
-        self.createSocketTimeout = createSocketTimeout
-        self.tcpListener = TCPListener()
+        self.createVirtualSocketTimeout = createVirtualSocketTimeout
         super.init()
     }
 
-    // MARK: - Private methods
-    // MARK: Handling non-TCP socket
-    private func createNonTCPVirtualSocket() {
-        let _ = SocketBuilder(with: nonTCPsession,
-                              streamReceivedBackTimeout: createSocketTimeout) {
-            [weak self] newStreamPair, error in
-
-            guard let strongSelf = self else {
-                return
-            }
-
-            guard error == nil else {
-                strongSelf.disconnectNonTCPSession()
-                return
-            }
-
-            if let streamPair = newStreamPair {
-                strongSelf.virtualNonTCPSocket = VirtualSocket(
-                    with: streamPair.inputStream,
-                    outputStream: streamPair.outputStream
-                )
-
-                guard let virtualNonTCPSocket = strongSelf.virtualNonTCPSocket else {
-                    return
-                }
-
-                virtualNonTCPSocket.readDataFromStreamHandler = strongSelf.readDataFromInputStream
-                strongSelf.openStreamsOnNonTCPVirtualSocket()
-            }
-        }
-    }
-
-    private func openStreamsOnNonTCPVirtualSocket() {
-        self.virtualNonTCPSocket?.openStreams()
-    }
-
-    private func closeNonTCPVirtualSocket() {
-        self.virtualNonTCPSocket?.closeStreams()
-    }
-
-    // MARK: Handling non-TCP session
+    // MARK: - Internal methods
     func disconnectNonTCPSession() {
+        print("disconnect nonTCP session")
         self.nonTCPsession.disconnect()
     }
 
-    // MARK: Handlers
-    private func socketDisconnectHandler(socket: GCDAsyncSocket) {
-        disconnectNonTCPSession()
+    // MARK: - Private methods
+    private func createNonTCPVirtualSocket(
+        with completion: ((VirtualSocket?, ErrorType?) -> Void)) {
+
+        let _ = SocketBuilder(with: nonTCPsession,
+                              streamReceivedBackTimeout: createVirtualSocketTimeout) {
+            virtualSocket, error in
+            completion(virtualSocket, error)
+        }
     }
 
-    private func socketReadDataHandler(data: NSData) {
-        writeDataToOutputStream(data)
+    private func readDataFromInputStream(virtualSocket: VirtualSocket, data: NSData) {
+        virtualSockets.withValue {
+            print("Browser. searcing for socket...")
+            if let socket = $0.key(for: virtualSocket) {
+                print("Browser. socket founded. writing...")
+                socket.writeData(data, withTimeout: -1, tag: 0)
+            }
+        }
     }
 
-    private func readDataFromInputStream(data: NSData) {
-        let noTimeOut: NSTimeInterval = -1
-        tcpListener.socket.writeData(data, withTimeout: noTimeOut, tag: 0)
-    }
-
-    private func writeDataToOutputStream(data: NSData) {
-        let dataLength = data.length
-        let buffer: [UInt8] = Array(
-            UnsafeBufferPointer(start: UnsafePointer<UInt8>(data.bytes), count: dataLength)
-        )
-
-        let bytesWritten = self.virtualNonTCPSocket?.outputStream.write(buffer, maxLength: dataLength)
-
-        if bytesWritten < 0 { }
+    private func didClosedInputStreamHandler() {
+        print("received closed event on vs inputStream in relay")
     }
 }
 
-extension Relay where SocketBuilder: AdvertiserVirtualSocketBuilder {
+// MARK: - Methods that available for Relay<AdvertiserVirtualSocketBuilder>
+final class AdvertiserRelay: Relay<AdvertiserVirtualSocketBuilder> {
+
+    // MARK: - Internal state
+    internal var clientPort: UInt16 {
+        return tcpClient.localPort
+    }
+
+    // MARK: - Private state
+    private var tcpClient: TCPClient!
 
     // MARK: - Public methods
+    override init(with session: Session, createVirtualSocketTimeout: NSTimeInterval = 0) {
+        super.init(with: session, createVirtualSocketTimeout: createVirtualSocketTimeout)
+        self.tcpClient = TCPClient(with: TCPSocketReadDataHandler,
+                                   TCPSocketDisconnectHandler: TCPSocketDisconnectHandler)
+    }
+
     func openRelay(on port: UInt16, completion: (port: UInt16?, error: ErrorType?) -> Void) {
-        createSocketAndConnect(to: port, with: completion)
-        createNonTCPVirtualSocket()
-    }
+        tcpClient.connectToLocalhost(onPort: port) {
+            [weak self] socket, port, error in
+            guard let strongSelf = self else { return }
 
-    func closeRelay() {
-        disconnectTCPSocket()
-        closeNonTCPVirtualSocket()
-    }
+            print("advertiser. connecting TCP client and starting creating vs.")
 
-    // MARK: - Private methods
-    private func createSocketAndConnect(to preConfiguredPort: UInt16,
-                                        with completion: (port: UInt16?, error: ErrorType?)
-                                        -> Void) {
-        tcpListener.acceptNewConnectionHandler = {
-            socket in
-            let noTimeOut: NSTimeInterval = -1
-            socket.readDataWithTimeout(noTimeOut, tag: 0)
-        }
-
-        tcpListener.connectToLocalhost(onPort: preConfiguredPort) {
-            port, error in
-            completion(port: port, error: error)
-        }
-    }
-
-    private func disconnectTCPSocket() {
-        tcpListener.disconnectFromLocalhost()
-    }
-}
-
-extension Relay where SocketBuilder: BrowserVirtualSocketBuilder {
-
-    // MARK: - Public methods
-    func openRelay(with completion: (port: UInt16?, error: ErrorType?) -> Void) {
-        createTCPListener(with: completion)
-    }
-
-    func closeRelay() {
-        closeNonTCPVirtualSocket()
-        closeTCPListener()
-    }
-
-    // MARK: - Private methods
-    private func createTCPListener(with completion: (port: UInt16?, error: ErrorType?) -> Void) {
-        tcpListener.acceptNewConnectionHandler = {
-            [weak self] socket in
-
-            guard let strongSelf = self else {
+            guard error == nil else {
+                completion(port: port, error: error)
                 return
             }
 
-            strongSelf.createNonTCPVirtualSocket()
-        }
+            strongSelf.createNonTCPVirtualSocket {
+                virtualSocket, error in
 
-        let anyAvailablePort: UInt16? = 0
-        tcpListener.startListeningForIncomingConnections(onPort: anyAvailablePort!) {
-            port, error in
-            completion(port: port, error: error)
-        }
+                guard let virtualSocket = virtualSocket else {
+                    return
+                }
 
-        tcpListener.socketDisconnectHandler = socketDisconnectHandler
-        tcpListener.socketReadDataHandler = socketReadDataHandler
+                print("advertiser: VS is created after accepting connection, error: \(error)")
+
+                strongSelf.virtualSockets.modify {
+                    virtualSocket.didReadDataFromStreamHandler = strongSelf.readDataFromInputStream
+                    virtualSocket.openStreams()
+                    $0[socket] = virtualSocket
+                }
+
+                socket.readDataWithTimeout(-1, tag: 0)
+
+                completion(port: port, error: error)
+            }
+        }
     }
 
-    private func closeTCPListener() {
-        tcpListener.acceptNewConnectionHandler = nil
-        tcpListener.socketDisconnectHandler = nil
-        tcpListener.socketReadDataHandler = nil
-        tcpListener.stopListeningForIncomingConnectionsAndCloseSocket()
+    func closeRelay(with completion: (Bool) -> Void) {
+        disconnectTCPSocket {
+            result in
+            completion(result)
+        }
+
+        virtualSockets.modify {
+            $0.forEach { $0.1.closeStreams() }
+            $0.removeAll()
+        }
+    }
+
+    // MARK: - Private methods
+    private func disconnectTCPSocket(with completion: (Bool) -> Void) {
+        tcpClient.disconnectFromLocalhost {
+            result in
+            completion(result)
+        }
+    }
+
+    // MARK: - Private handlers
+    private func TCPSocketReadDataHandler(socket: GCDAsyncSocket, data: NSData) {
+        virtualSockets.withValue {
+            let virtualSocket = $0[socket]
+            print("socket \(socket) for vs \(virtualSocket)")
+            virtualSocket?.writeDataToOutputStream(data)
+        }
+    }
+
+    private func TCPSocketDisconnectHandler(socket: GCDAsyncSocket) {
+
+    }
+}
+
+// MARK: - Methods that available for Relay<BrowserVirtualSocketBuilder>
+final class BrowserRelay: Relay<BrowserVirtualSocketBuilder> {
+
+    // MARK: - Internal state
+    internal var listenerPort: UInt16 {
+        return tcpListener.listenerPort
+    }
+
+    // MARK: - Private state
+    private var tcpListener: TCPListener!
+
+    // MARK: - Public methods
+    override init(with session: Session, createVirtualSocketTimeout: NSTimeInterval) {
+        super.init(with: session, createVirtualSocketTimeout: createVirtualSocketTimeout)
+
+        tcpListener = TCPListener(with: TCPSocketReadDataHandler,
+                                  TCPsocketDisconnectHandler: TCPSocketDisconnectHandler)
+    }
+
+    func openRelay(with completion: (port: UInt16?, error: ErrorType?) -> Void) {
+        let anyAvailablePort: UInt16 = 0
+
+        tcpListener.startListeningForIncomingConnections(
+                                            on: anyAvailablePort,
+                                            newConnectionHandler: acceptConnectionHandler) {
+                port, error in
+                completion(port: port, error: error)
+        }
+    }
+
+    func closeRelay() {
+        tcpListener.stopListeningForIncomingConnections()
+
+        virtualSockets.modify {
+            $0.forEach { $0.1.closeStreams() }
+            $0.removeAll()
+        }
+    }
+
+    // MARK: - Handlers
+    private func acceptConnectionHandler(socket: GCDAsyncSocket) {
+        createNonTCPVirtualSocket {
+            virtualSocket, error in
+
+            print("browser: VS is created after accepting connection, error: \(error)")
+
+            self.virtualSockets.modify {
+                virtualSocket?.didReadDataFromStreamHandler = self.readDataFromInputStream
+                virtualSocket?.openStreams()
+                $0[socket] = virtualSocket
+            }
+
+            socket.readDataWithTimeout(-1, tag: 1)
+        }
+    }
+
+    private func TCPSocketReadDataHandler(socket: GCDAsyncSocket, data: NSData) {
+        let msg = NSString(data: data, encoding: NSUTF8StringEncoding)
+
+        print("Relay: read TCPListener data with length \(msg?.length)")
+        virtualSockets.withValue {
+            let virtualSocket = $0[socket]
+            virtualSocket?.writeDataToOutputStream(data)
+        }
+
+    }
+
+    private func TCPSocketDisconnectHandler(socket: GCDAsyncSocket) {
+        self.virtualSockets.modify {
+            let virtualSocket = $0[socket]
+            virtualSocket?.closeStreams()
+            $0[socket] = nil
+        }
     }
 }

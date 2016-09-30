@@ -7,21 +7,26 @@
 //  See LICENSE.txt file in the project root for full license information.
 //
 
-import XCTest
-@testable import ThaliCore
 import MultipeerConnectivity
+@testable import ThaliCore
+import XCTest
 
 class BrowserTests: XCTestCase {
 
-    // MARK: - Public state
-    let randomlyGeneratedServiceType = String.random(length: 7)
+    // MARK: - State
+    let randomlyGeneratedServiceType = String.randomValidServiceType(length: 7)
 
     // MARK: - Tests
     func testStartStopChangesListeningState() {
         // Given
-        let browser = Browser(serviceType: randomlyGeneratedServiceType,
-                              foundPeer: unexpectedFoundPeerHandler,
-                              lostPeer: unexpectedLostPeerHandler)
+        let newBrowser = Browser(serviceType: randomlyGeneratedServiceType,
+                                 foundPeer: unexpectedFoundPeerHandler,
+                                 lostPeer: unexpectedLostPeerHandler)
+
+        guard let browser = newBrowser else {
+            XCTFail("Browser must not be nil")
+            return
+        }
 
         // When
         browser.startListening(unexpectedErrorHandler)
@@ -39,15 +44,18 @@ class BrowserTests: XCTestCase {
         let foundPeerExpectation =
             expectationWithDescription("foundPeerHandler is called on Browser")
 
-        let browser = Browser(serviceType: randomlyGeneratedServiceType,
-                              foundPeer: {
-                                  [weak foundPeerExpectation] _ in
-                                  foundPeerExpectation?.fulfill()
-                              },
-                              lostPeer: {
-                                  _ in
-                              })
-        let randomlyGeneratedPeerID = MCPeerID(displayName: PeerIdentifier().stringValue)
+        let newBrowser = Browser(serviceType: randomlyGeneratedServiceType,
+                                 foundPeer: {
+                                     [weak foundPeerExpectation] _ in
+                                     foundPeerExpectation?.fulfill()
+                                 },
+                                 lostPeer: { _ in })
+
+        guard let browser = newBrowser else {
+            XCTFail("Browser must not be nil")
+            return
+        }
+        let randomlyGeneratedPeerID = MCPeerID(displayName: Peer().stringValue)
         let mcBrowser = MCNearbyServiceBrowser(peer: randomlyGeneratedPeerID,
                                                serviceType: randomlyGeneratedServiceType)
 
@@ -65,15 +73,19 @@ class BrowserTests: XCTestCase {
         let lostPeerExpectation =
             expectationWithDescription("lostPeerHandler is called on Browser")
 
-        let browser = Browser(serviceType: randomlyGeneratedServiceType,
-                              foundPeer: {
-                                _ in
-                              },
-                              lostPeer: {
-                                [weak lostPeerExpectation] _ in
-                                lostPeerExpectation?.fulfill()
-                              })
-        let randomlyGeneratedPeerID = MCPeerID(displayName: PeerIdentifier().stringValue)
+        let newBrowser = Browser(serviceType: randomlyGeneratedServiceType,
+                                 foundPeer: { _ in },
+                                 lostPeer: {
+                                     [weak lostPeerExpectation] _ in
+                                     lostPeerExpectation?.fulfill()
+                                 })
+
+        guard let browser = newBrowser else {
+            XCTFail("Browser must not be nil")
+            return
+        }
+
+        let randomlyGeneratedPeerID = MCPeerID(displayName: Peer().stringValue)
         let mcBrowser = MCNearbyServiceBrowser(peer: randomlyGeneratedPeerID,
                                                serviceType: randomlyGeneratedServiceType)
 
@@ -91,9 +103,14 @@ class BrowserTests: XCTestCase {
             expectationWithDescription("Failed start advertising because of " +
                 "delegate MCNearbyServiceBrowserDelegate call")
 
-        let browser = Browser(serviceType: randomlyGeneratedServiceType,
-                              foundPeer: unexpectedFoundPeerHandler,
-                              lostPeer: unexpectedLostPeerHandler)
+        let newBrowser = Browser(serviceType: randomlyGeneratedServiceType,
+                                 foundPeer: unexpectedFoundPeerHandler,
+                                 lostPeer: unexpectedLostPeerHandler)
+
+        guard let browser = newBrowser else {
+            XCTFail("Browser must not be nil")
+            return
+        }
 
         browser.startListening {
             [weak failedStartBrowsingExpectation] error in
@@ -120,21 +137,26 @@ class BrowserTests: XCTestCase {
         let foundPeerExpectation =
             expectationWithDescription("foundPeerHandler is called on Browser")
 
-        let randomlyGeneratedPeerIdentifier = PeerIdentifier()
+        let randomlyGeneratedPeer = Peer()
 
-        let browser = Browser(serviceType: randomlyGeneratedServiceType,
-                              foundPeer: {
-                                  [weak foundPeerExpectation] foundedPeerIdentifier in
+        let newBrowser = Browser(serviceType: randomlyGeneratedServiceType,
+                                 foundPeer: {
+                                     [weak foundPeerExpectation] foundedPeer in
 
-                                  foundPeerExpectation?.fulfill()
-                                  XCTAssertEqual(
-                                      foundedPeerIdentifier, randomlyGeneratedPeerIdentifier
-                                  )
-                              },
-                              lostPeer: unexpectedLostPeerHandler)
+                                     foundPeerExpectation?.fulfill()
+                                     XCTAssertEqual(
+                                         foundedPeer, randomlyGeneratedPeer
+                                     )
+                                 },
+                                 lostPeer: unexpectedLostPeerHandler)
+
+        guard let browser = newBrowser else {
+            XCTFail("Browser must not be nil")
+            return
+        }
 
         let peerIdOfPeerThatWillBeFounded =
-            MCPeerID(displayName: randomlyGeneratedPeerIdentifier.stringValue)
+            MCPeerID(displayName: randomlyGeneratedPeer.stringValue)
         let mcBrowser = MCNearbyServiceBrowser(peer: peerIdOfPeerThatWillBeFounded,
                                                serviceType: randomlyGeneratedServiceType)
 
@@ -146,29 +168,34 @@ class BrowserTests: XCTestCase {
 
         // When
         do {
-            let _ = try
-                browser.inviteToConnectPeer(with: randomlyGeneratedPeerIdentifier,
-                                            sessionConnectHandler:  unexpectedConnectHandler,
-                                            sessionDisconnectHandler: unexpectedDisconnectHandler)
+            let session = try
+                browser.inviteToConnect(randomlyGeneratedPeer,
+                                        sessionConnectHandler:  unexpectedConnectHandler,
+                                        sessionDisconnectHandler: unexpectedDisconnectHandler)
+            // Then
+            XCTAssertNotNil(session)
         } catch let error {
             XCTFail("inviteToConnectPeer didn't return Session. Unexpected error: \(error)")
         }
-
-        // Then
-        // Session object is returned
     }
 
     func testInviteToConnectWrongPeerReturnsIllegalPeerIDError() {
         // Given
-        let browser = Browser(serviceType: randomlyGeneratedServiceType,
-                              foundPeer: unexpectedFoundPeerHandler,
-                              lostPeer: unexpectedLostPeerHandler)
+        let newBrowser = Browser(serviceType: randomlyGeneratedServiceType,
+                                 foundPeer: unexpectedFoundPeerHandler,
+                                 lostPeer: unexpectedLostPeerHandler)
+
+        guard let browser = newBrowser else {
+            XCTFail("Browser must not be nil")
+            return
+        }
+
         // When
         do {
             let _ = try
-                browser.inviteToConnectPeer(with: PeerIdentifier(),
-                                            sessionConnectHandler: unexpectedConnectHandler,
-                                            sessionDisconnectHandler: unexpectedDisconnectHandler)
+                browser.inviteToConnect(Peer(),
+                                        sessionConnectHandler: unexpectedConnectHandler,
+                                        sessionDisconnectHandler: unexpectedDisconnectHandler)
         } catch let error as ThaliCoreError {
             // Then
             XCTAssertEqual(error, ThaliCoreError.IllegalPeerID)
@@ -181,11 +208,11 @@ class BrowserTests: XCTestCase {
     }
 
     // MARK: - Private methods
-    private func unexpectedFoundPeerHandler(peer: PeerIdentifier) {
+    private func unexpectedFoundPeerHandler(peer: Peer) {
         XCTFail("Unexpected call foundPeerHandler with peer: \(peer)")
     }
 
-    private func unexpectedLostPeerHandler(peer: PeerIdentifier) {
+    private func unexpectedLostPeerHandler(peer: Peer) {
         XCTFail("unexpected lostPeerHandler with peer: \(peer)")
     }
 }

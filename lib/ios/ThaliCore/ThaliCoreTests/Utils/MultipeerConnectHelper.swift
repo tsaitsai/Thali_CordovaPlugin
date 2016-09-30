@@ -11,26 +11,26 @@ import Foundation
 import XCTest
 @testable import ThaliCore
 
-func createMPCFConnectionWithCompletion(completion: (PeerAvailability) -> Void)
-                                        -> (AdvertiserManager, BrowserManager) {
+func createMPCFPeers(with browsingCompletion: (PeerAvailability) -> Void)
+    -> (AdvertiserManager, BrowserManager) {
 
-    let serviceType = String.random(length: 7)
+        let serviceType = String.randomValidServiceType(length: 7)
 
-    let browserManager = BrowserManager(serviceType: serviceType,
-                                        inputStreamReceiveTimeout: 5,
-                                        peersAvailabilityChangedHandler: {
-                                            peerAvailability in
+        let browserManager = BrowserManager(serviceType: serviceType,
+                                            inputStreamReceiveTimeout: 5,
+                                            peersAvailabilityChangedHandler: {
+                                                peerAvailability in
 
-                                            completion(peerAvailability.first!)
-    })
-    browserManager.startListeningForAdvertisements(unexpectedErrorHandler)
+                                                browsingCompletion(peerAvailability.first!)
+        })
+        browserManager.startListeningForAdvertisements(unexpectedErrorHandler)
 
-    let advertiserManager = AdvertiserManager(serviceType: serviceType,
-                                              disposeAdvertiserTimeout: 30)
-    advertiserManager.startUpdateAdvertisingAndListening(onPort: 0,
-                                                         errorHandler: unexpectedErrorHandler)
+        let advertiserManager = AdvertiserManager(serviceType: serviceType,
+                                                  disposeAdvertiserTimeout: 30)
+        advertiserManager.startUpdateAdvertisingAndListening(onPort: 60630,
+            errorHandler: unexpectedErrorHandler)
 
-    return (advertiserManager, browserManager)
+        return (advertiserManager, browserManager)
 }
 
 func unexpectedErrorHandler(error: ErrorType) {
@@ -45,6 +45,10 @@ func unexpectedDisconnectHandler() {
     XCTFail("Unexpected disconnect received")
 }
 
-func unexpectedSessionHandler(session: Session) {
+func unexpectedAcceptConnectionHandler() {
+    XCTFail("Unexpected acceptConnection received")
+}
+
+func unexpectedReceivedSessionHandler(session: Session) {
     XCTFail("Unexpected session received: \(session)")
 }

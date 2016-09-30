@@ -10,12 +10,14 @@
 import Foundation
 import MultipeerConnectivity
 
-/// Class for managing MCSession: subscribing for incoming streams and creating output streams
+/**
+ Manages underlying `MCSession`, handles `MCSessionDelegate` events.
+ */
 class Session: NSObject {
 
     // MARK: - Internal state
     internal private(set) var sessionState: Atomic<MCSessionState> = Atomic(.NotConnected)
-    internal var sessionStateChangesHandler: ((MCSessionState) -> Void)?
+    internal var didChangeStateHandler: ((MCSessionState) -> Void)?
     internal var didReceiveInputStreamHandler: ((NSInputStream, String) -> Void)?
 
     // MARK: - Private state
@@ -41,7 +43,7 @@ class Session: NSObject {
     func startOutputStream(with name: String) throws -> NSOutputStream {
         do {
             return try session.startStreamWithName(name, toPeer: identifier)
-        } catch _ {
+        } catch {
             throw ThaliCoreError.ConnectionFailed
         }
     }
@@ -58,7 +60,7 @@ extension Session: MCSessionDelegate {
         assert(identifier.displayName == peerID.displayName)
 
         sessionState.modify { $0 = state }
-        sessionStateChangesHandler?(state)
+        didChangeStateHandler?(state)
 
         switch state {
         case .NotConnected:
@@ -71,23 +73,23 @@ extension Session: MCSessionDelegate {
     }
 
     func session(session: MCSession,
-                 didReceiveCertificate certificate: [AnyObject]?,
-                 fromPeer peerID: MCPeerID,
-                 certificateHandler: (Bool) -> Void) {
-        // FIXME: in the future we should accept only trusted certificate
-        certificateHandler(true)
-    }
-
-
-    func session(session: MCSession, didReceiveStream stream: NSInputStream,
-                 withName streamName: String, fromPeer peerID: MCPeerID) {
+                 didReceiveStream stream: NSInputStream,
+                 withName streamName: String,
+                 fromPeer peerID: MCPeerID) {
         assert(identifier.displayName == peerID.displayName)
         didReceiveInputStreamHandler?(stream, streamName)
     }
 
     func session(session: MCSession, didReceiveData data: NSData, fromPeer peerID: MCPeerID) {}
-    func session(session: MCSession, didStartReceivingResourceWithName resourceName: String,
-                 fromPeer peerID: MCPeerID, withProgress progress: NSProgress) {}
-    func session(session: MCSession, didFinishReceivingResourceWithName resourceName: String,
-                 fromPeer peerID: MCPeerID, atURL localURL: NSURL, withError error: NSError?) {}
+
+    func session(session: MCSession,
+                 didStartReceivingResourceWithName resourceName: String,
+                 fromPeer peerID: MCPeerID,
+                 withProgress progress: NSProgress) {}
+
+    func session(session: MCSession,
+                 didFinishReceivingResourceWithName resourceName: String,
+                 fromPeer peerID: MCPeerID,
+                 atURL localURL: NSURL,
+                 withError error: NSError?) {}
 }

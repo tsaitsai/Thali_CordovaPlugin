@@ -12,10 +12,11 @@ import XCTest
 
 class BrowserManagerTests: XCTestCase {
 
+    // MARK: - State
     var serviceType: String!
 
     override func setUp() {
-        serviceType = String.random(length: 7)
+        serviceType = String.randomValidServiceType(length: 7)
     }
 
     // MARK: - Tests
@@ -57,7 +58,7 @@ class BrowserManagerTests: XCTestCase {
         XCTAssertFalse(browserManager.listening)
 
         // When
-        browserManager.connectToPeer(PeerIdentifier(), syncValue: "0") {
+        browserManager.connectToPeer(Peer(), syncValue: "0") {
             [weak getStartListeningNotActiveErrorExpectation] syncValue, error, port in
             if let error = error as? ThaliCoreError {
                 connectionError = error
@@ -81,8 +82,8 @@ class BrowserManagerTests: XCTestCase {
         browserManager.startListeningForAdvertisements(unexpectedErrorHandler)
 
         // When
-        let notDiscoveredPeerIdentifier = PeerIdentifier()
-        browserManager.connectToPeer(notDiscoveredPeerIdentifier, syncValue: "0") {
+        let notDiscoveredPeer = Peer()
+        browserManager.connectToPeer(notDiscoveredPeer, syncValue: "0") {
             [weak getIllegalPeerIDErrorExpectation] syncValue, error, port in
             if let error = error as? ThaliCoreError {
                 connectionError = error
@@ -113,14 +114,14 @@ class BrowserManagerTests: XCTestCase {
         advertiserManager.startUpdateAdvertisingAndListening(onPort: port1,
                                                              errorHandler: unexpectedErrorHandler)
         let firstGenerationAdvertiserIdentifier =
-            advertiserManager.advertisers.value.last?.peerIdentifier
+            advertiserManager.advertisers.value.last?.peer
 
 
         // Starting 2nd generation of advertiser
         advertiserManager.startUpdateAdvertisingAndListening(onPort: port2,
                                                              errorHandler: unexpectedErrorHandler)
         let secondGenerationAdvertiserIdentifier =
-            advertiserManager.advertisers.value.last?.peerIdentifier
+            advertiserManager.advertisers.value.last?.peer
 
         let browserManager = BrowserManager(
             serviceType: serviceType,
@@ -145,7 +146,7 @@ class BrowserManagerTests: XCTestCase {
         // Then
         waitForExpectationsWithTimeout(disposeTimeout, handler: nil)
         let lastGenerationOfAdvertiserPeer =
-            browserManager.lastGenerationPeerIdentifier(for: firstGenerationAdvertiserIdentifier!)
+            browserManager.lastGenerationPeer(for: firstGenerationAdvertiserIdentifier!)
 
         XCTAssertEqual(lastGenerationOfAdvertiserPeer?.generation,
                        secondGenerationAdvertiserIdentifier?.generation)
@@ -177,9 +178,8 @@ class BrowserManagerTests: XCTestCase {
         waitForExpectationsWithTimeout(disposeAdvertiserTimeout, handler: nil)
 
         if let advertiser = advertiserManager.advertisers.value.first {
-            let advertiserPeerIdentifierUUID = advertiser.peerIdentifier.uuid
             XCTAssertEqual(advertiserPeerAvailability?.available, true)
-            XCTAssertEqual(advertiserPeerIdentifierUUID, advertiserPeerAvailability?.peerIdentifier)
+            XCTAssertEqual(advertiser.peer.uuid, advertiserPeerAvailability?.peerIdentifier)
         } else {
             XCTFail("AdvertiserManager does not have any advertisers")
         }
@@ -190,7 +190,7 @@ class BrowserManagerTests: XCTestCase {
         let MPCFConnectionCreatedExpectation =
             expectationWithDescription("MPCF connection is created.")
 
-        let (advertiserManager, browserManager) = createMPCFConnectionWithCompletion {
+        let (advertiserManager, browserManager) = createMPCFPeers {
             peerAvailability in
             MPCFConnectionCreatedExpectation.fulfill()
         }
@@ -213,19 +213,19 @@ class BrowserManagerTests: XCTestCase {
         let MPCFConnectionCreatedExpectation =
             expectationWithDescription("MPCF connection is created.")
 
-        let (advertiserManager, browserManager) = createMPCFConnectionWithCompletion {
+        let (advertiserManager, browserManager) = createMPCFPeers {
             peerAvailability in
             MPCFConnectionCreatedExpectation.fulfill()
         }
 
         let creatingMPCFSessionTimeout = 5.0
-        waitForExpectationsWithTimeout(creatingMPCFSessionTimeout, handler: {
+        waitForExpectationsWithTimeout(creatingMPCFSessionTimeout) {
             error in
 
             if nil != error {
                 XCTFail("Can not create MPCF connection and browse advertisers.")
             }
-        })
+        }
 
         let multiResolvedConnectResolvedCalledExpectation =
             expectationWithDescription("connectToPeer method returns callback.")
@@ -255,13 +255,13 @@ class BrowserManagerTests: XCTestCase {
         var MPCFConnectionCreatedExpectation: XCTestExpectation? =
             expectationWithDescription("MPCF connection is created.")
 
-        let (advertiserManager, browserManager) = createMPCFConnectionWithCompletion {
+        let (advertiserManager, browserManager) = createMPCFPeers {
             peerAvailability in
             MPCFConnectionCreatedExpectation?.fulfill()
         }
 
         let creatingMPCFSessionTimeout = 5.0
-        waitForExpectationsWithTimeout(creatingMPCFSessionTimeout, handler: {
+        waitForExpectationsWithTimeout(creatingMPCFSessionTimeout) {
             error in
 
             if nil != error {
@@ -269,7 +269,7 @@ class BrowserManagerTests: XCTestCase {
             } else {
                 MPCFConnectionCreatedExpectation = nil
             }
-        })
+        }
 
         var multiConnectResolvedCalledAfterConnectExpectation: XCTestExpectation? =
             expectationWithDescription("connectToPeer method returns callback on connect.")
@@ -284,10 +284,10 @@ class BrowserManagerTests: XCTestCase {
         }
 
         let multiConnectResolvedTimeout = 5.0
-        waitForExpectationsWithTimeout(multiConnectResolvedTimeout, handler: {
+        waitForExpectationsWithTimeout(multiConnectResolvedTimeout) {
             error in
             multiConnectResolvedCalledAfterConnectExpectation = nil
-        })
+        }
 
         XCTAssertEqual(1,
                        browserManager.activeRelays.value.count,
@@ -299,10 +299,10 @@ class BrowserManagerTests: XCTestCase {
         // When
         browserManager.disconnect(peerToConnect)
 
-        waitForExpectationsWithTimeout(multiConnectResolvedTimeout, handler: {
+        waitForExpectationsWithTimeout(multiConnectResolvedTimeout) {
             error in
             multiConnectResolvedCalledAfterDisconnectExpectation = nil
-        })
+        }
 
         // Then
         XCTAssertEqual(0,
@@ -315,13 +315,13 @@ class BrowserManagerTests: XCTestCase {
         var MPCFConnectionCreatedExpectation: XCTestExpectation? =
             expectationWithDescription("MPCF connection is created.")
 
-        let (advertiserManager, browserManager) = createMPCFConnectionWithCompletion {
+        let (advertiserManager, browserManager) = createMPCFPeers {
             peerAvailability in
             MPCFConnectionCreatedExpectation?.fulfill()
         }
 
         let creatingMPCFSessionTimeout = 5.0
-        waitForExpectationsWithTimeout(creatingMPCFSessionTimeout, handler: {
+        waitForExpectationsWithTimeout(creatingMPCFSessionTimeout) {
             error in
 
             if nil != error {
@@ -329,7 +329,7 @@ class BrowserManagerTests: XCTestCase {
             } else {
                 MPCFConnectionCreatedExpectation = nil
             }
-        })
+        }
 
         var multiConnectResolvedCalledAfterConnectExpectation: XCTestExpectation? =
             expectationWithDescription("connectToPeer method returns callback on connect.")
@@ -341,10 +341,10 @@ class BrowserManagerTests: XCTestCase {
         }
 
         let multiConnectResolvedTimeout = 5.0
-        waitForExpectationsWithTimeout(multiConnectResolvedTimeout, handler: {
+        waitForExpectationsWithTimeout(multiConnectResolvedTimeout) {
             error in
             multiConnectResolvedCalledAfterConnectExpectation = nil
-        })
+        }
 
         XCTAssertEqual(1,
                        browserManager.activeRelays.value.count,
@@ -352,8 +352,8 @@ class BrowserManagerTests: XCTestCase {
 
 
         // When
-        let wrongPeerIdentifier = PeerIdentifier()
-        browserManager.disconnect(wrongPeerIdentifier)
+        let wrongPeer = Peer()
+        browserManager.disconnect(wrongPeer)
 
         // Then
         XCTAssertEqual(1,
@@ -391,13 +391,11 @@ class BrowserManagerTests: XCTestCase {
         advertiserManager.startUpdateAdvertisingAndListening(onPort: 42,
                                                              errorHandler: unexpectedErrorHandler)
 
-        let advertiserPeerIdentifierUUID =
-            advertiserManager.advertisers.value.first!.peerIdentifier.uuid
-
         // Then
         let peerAvailabilityHandlerTimeout = 10.0
         waitForExpectationsWithTimeout(peerAvailabilityHandlerTimeout, handler: nil)
-        XCTAssertEqual(advertiserPeerIdentifierUUID, advertiserPeerAvailability?.peerIdentifier)
+        XCTAssertEqual(advertiserManager.advertisers.value.first!.peer.uuid,
+                       advertiserPeerAvailability?.peerIdentifier)
     }
 
     func testPeerAvailabilityChangedAfterStopAdvertising() {
@@ -414,8 +412,8 @@ class BrowserManagerTests: XCTestCase {
             serviceType: serviceType,
             inputStreamReceiveTimeout: 1,
             peersAvailabilityChangedHandler: {
-                [weak advertiserManager,
-                weak peerAvailabilityChangedToFalseExpectation] peerAvailability in
+                [weak advertiserManager, weak peerAvailabilityChangedToFalseExpectation]
+                peerAvailability in
 
                 if let peerAvailability = peerAvailability.first {
                     if peerAvailability.available {
@@ -432,28 +430,23 @@ class BrowserManagerTests: XCTestCase {
         advertiserManager.startUpdateAdvertisingAndListening(onPort: 42,
                                                              errorHandler: unexpectedErrorHandler)
 
-        let advertiserPeerIdentifierUUID =
-            advertiserManager.advertisers.value.first!.peerIdentifier.uuid
-
         // Then
         let peerAvailabilityHandlerTimeout = 10.0
         waitForExpectationsWithTimeout(peerAvailabilityHandlerTimeout, handler: nil)
-        XCTAssertEqual(advertiserPeerIdentifierUUID, advertiserPeerAvailability?.peerIdentifier)
     }
 
-    func testConnectToPeerMethodCreatesTCPSocket() {
+    func testConnectToPeerMethodReturnsTCPPort() {
         // Given
         var MPCFConnectionCreatedExpectation: XCTestExpectation? =
             expectationWithDescription("MPCF connection is created.")
 
-        let peerIdentifier = PeerIdentifier()
-        let (advertiserManager, browserManager) = createMPCFConnectionWithCompletion {
+        let (advertiserManager, browserManager) = createMPCFPeers {
             peerAvailability in
             MPCFConnectionCreatedExpectation?.fulfill()
         }
 
         let creatingMPCFSessionTimeout = 5.0
-        waitForExpectationsWithTimeout(creatingMPCFSessionTimeout, handler: {
+        waitForExpectationsWithTimeout(creatingMPCFSessionTimeout) {
             error in
 
             if nil != error {
@@ -461,9 +454,9 @@ class BrowserManagerTests: XCTestCase {
             } else {
                 MPCFConnectionCreatedExpectation = nil
             }
-        })
+        }
 
-        let TCPSocketSuccessfullyCreatedExpectation =
+        var TCPSocketSuccessfullyCreatedExpectation: XCTestExpectation? =
             expectationWithDescription("Waiting until TCP socket created.")
 
         // When
@@ -471,16 +464,19 @@ class BrowserManagerTests: XCTestCase {
         browserManager.connectToPeer(peerToConnect, syncValue: "0") {
             syncValue, error, port in
 
-            if nil != error {
-                XCTFail("Error during creation TCP socket that's listening for connections")
+            guard error == nil else {
+                XCTFail("Error during connection: \(error.debugDescription)")
                 return
             }
 
-            TCPSocketSuccessfullyCreatedExpectation.fulfill()
+            TCPSocketSuccessfullyCreatedExpectation?.fulfill()
         }
 
         // Then
-        let creatingTCPSocketTimeout = 5.0
-        waitForExpectationsWithTimeout(creatingTCPSocketTimeout, handler: nil)
+        let creatingTCPSocketTimeout = 10.0
+        waitForExpectationsWithTimeout(creatingTCPSocketTimeout) {
+            error in
+            TCPSocketSuccessfullyCreatedExpectation = nil
+        }
     }
 }

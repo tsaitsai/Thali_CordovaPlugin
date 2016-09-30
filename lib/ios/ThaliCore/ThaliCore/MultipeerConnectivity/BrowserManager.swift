@@ -9,7 +9,9 @@
 
 import Foundation
 
-// Class for managing Thali browser's logic
+/**
+ Manages Thali browser's logic
+ */
 public final class BrowserManager: NSObject {
 
     // MARK: - Public state
@@ -18,9 +20,8 @@ public final class BrowserManager: NSObject {
     }
 
     // MARK: - Internal state
-    internal private(set) var availablePeers: Atomic<[PeerIdentifier]> = Atomic([])
-    internal private(set) var activeRelays: Atomic<[String : Relay<BrowserVirtualSocketBuilder>]> =
-        Atomic([:])
+    internal private(set) var availablePeers: Atomic<[Peer]> = Atomic([])
+    internal private(set) var activeRelays: Atomic<[String : BrowserRelay]> = Atomic([:])
 
     // MARK: - Private state
     private var currentBrowser: Browser?
@@ -38,14 +39,20 @@ public final class BrowserManager: NSObject {
     }
 
     public func startListeningForAdvertisements(errorHandler: ErrorType -> Void) {
-        if currentBrowser != nil {
+
+        if currentBrowser != nil { return }
+
+        let browser = Browser(serviceType: serviceType,
+                              foundPeer: handleFound,
+                              lostPeer: handleLost)
+
+        guard let newBrowser = browser else {
+            errorHandler(ThaliCoreError.ConnectionFailed)
             return
         }
-        let browser = Browser(serviceType: serviceType,
-                              foundPeer: handleFoundPeer,
-                              lostPeer: handleLostPeer)
-        browser.startListening(errorHandler)
-        self.currentBrowser = browser
+
+        newBrowser.startListening(errorHandler)
+        self.currentBrowser = newBrowser
     }
 
     public func stopListeningForAdvertisements() {
@@ -53,7 +60,7 @@ public final class BrowserManager: NSObject {
         self.currentBrowser = nil
     }
 
-    public func connectToPeer(identifier: PeerIdentifier,
+    public func connectToPeer(peer: Peer,
                               syncValue: String,
                               completion: MultiConnectResolvedCallback) {
 
@@ -64,17 +71,14 @@ public final class BrowserManager: NSObject {
             return
         }
 
-        let activeSessionExists = (nil != activeRelays.value[identifier.uuid])
-
-        if activeSessionExists {
-            let port: UInt16? = activeRelays.value[identifier.uuid]?.listenerPort
+        if let activeRelay = activeRelays.value[peer.uuid] {
             completion(syncValue: syncValue,
                        error: nil,
-                       port: port)
+                       port: activeRelay.listenerPort)
+            return
         }
 
-        guard
-            let lastGenerationIdentifier = self.lastGenerationPeerIdentifier(for: identifier) else {
+        guard let lastGenerationPeer = self.lastGenerationPeer(for: peer) else {
                 completion(syncValue: syncValue,
                            error: ThaliCoreError.IllegalPeerID,
                            port: nil)
@@ -82,16 +86,13 @@ public final class BrowserManager: NSObject {
         }
 
         do {
-            let session = try currentBrowser.inviteToConnectPeer(
-                with: lastGenerationIdentifier,
+            let session = try currentBrowser.inviteToConnect(
+                lastGenerationPeer,
                 sessionConnectHandler: {
                     [weak self] in
+                    guard let strongSelf = self else { return }
 
-                    guard let strongSelf = self else {
-                        return
-                    }
-
-                    let relay = strongSelf.activeRelays.value[identifier.uuid]
+                    let relay = strongSelf.activeRelays.value[peer.uuid]
 
                     relay?.openRelay {
                         port, error in
@@ -100,29 +101,22 @@ public final class BrowserManager: NSObject {
                 },
                 sessionDisconnectHandler: {
                     [weak self] in
-
-                    guard let strongSelf = self else {
-                        return
-                    }
+                    guard let strongSelf = self else { return }
 
                     strongSelf.activeRelays.modify {
-                        if let relay = $0[identifier.uuid] {
+                        if let relay = $0[peer.uuid] {
                             relay.closeRelay()
                         }
-                        $0[identifier.uuid] = nil
+                        $0[peer.uuid] = nil
+                        print("relay nil in active relays bro")
                     }
-
-                    completion(syncValue: syncValue,
-                               error: ThaliCoreError.ConnectionFailed,
-                               port: nil)
                 }
             )
 
             activeRelays.modify {
-                let relay: Relay<BrowserVirtualSocketBuilder> =
-                    Relay(with: session,
-                        createSocketTimeout: self.inputStreamReceiveTimeout)
-                $0[identifier.uuid] = relay
+                let relay = BrowserRelay(with: session,
+                                         createVirtualSocketTimeout: self.inputStreamReceiveTimeout)
+                $0[peer.uuid] = relay
             }
         } catch let error {
             completion(syncValue: syncValue,
@@ -131,40 +125,38 @@ public final class BrowserManager: NSObject {
         }
     }
 
-    public func disconnect(peerIdentifier: PeerIdentifier) {
-        guard let relay = activeRelays.value[peerIdentifier.uuid] else {
+    public func disconnect(peer: Peer) {
+        guard let relay = activeRelays.value[peer.uuid] else {
             return
         }
 
         relay.disconnectNonTCPSession()
     }
 
-    func lastGenerationPeerIdentifier(for identifier: PeerIdentifier) -> PeerIdentifier? {
+    func lastGenerationPeer(for peer: Peer) -> Peer? {
         return availablePeers.withValue {
             $0
-            .filter { $0.uuid == identifier.uuid }
+            .filter { $0.uuid == peer.uuid }
             .maxElement { $0.0.generation < $0.1.generation }
         }
     }
 
-    // MARK: - Private methods
-    private func handleFoundPeer(with identifier: PeerIdentifier) {
-        let peerAvailability = PeerAvailability(peerIdentifier: identifier,
-                                                available: true)
+    // MARK: - Private handlers
+    private func handleFound(peer: Peer) {
+        availablePeers.modify { $0.append(peer) }
 
-        availablePeers.modify { $0.append(identifier) }
-        peersAvailabilityChangedHandler([peerAvailability])
+        let updatedPeerAvailability = PeerAvailability(peer: peer, available: true)
+        peersAvailabilityChangedHandler([updatedPeerAvailability])
     }
 
-    private func handleLostPeer(with identifier: PeerIdentifier) {
-        let peerAvailability = PeerAvailability(peerIdentifier: identifier,
-                                                available: false)
-
+    private func handleLost(peer: Peer) {
         availablePeers.modify {
-            if let indexOfLostPeer = $0.indexOf(identifier) {
+            if let indexOfLostPeer = $0.indexOf(peer) {
                 $0.removeAtIndex(indexOfLostPeer)
             }
         }
-        peersAvailabilityChangedHandler([peerAvailability])
+
+        let updatedPeerAvailability = PeerAvailability(peer: peer, available: false)
+        peersAvailabilityChangedHandler([updatedPeerAvailability])
     }
 }

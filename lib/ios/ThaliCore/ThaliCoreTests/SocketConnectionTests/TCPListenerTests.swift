@@ -1,6 +1,6 @@
 //
 //  Thali CordovaPlugin
-//  VirtualSocketTests.swift
+//  TCPListenerTests.swift
 //
 //  Copyright (C) Microsoft. All rights reserved.
 //  Licensed under the MIT license.
@@ -9,8 +9,7 @@
 
 import XCTest
 @testable import ThaliCore
-import MultipeerConnectivity
 
-class VirtualSocketTests: XCTestCase {
+class TCPListenerTests: XCTestCase {
 
 }
